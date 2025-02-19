@@ -6,7 +6,6 @@
 #include <future>
 #include <thread>
 #include "Video.hpp"
-#include "MonoVideoOdometry.hpp"
 #include "Processor.hpp"
 #include <httplib.h> // For the web server (cpp-httplib)
 
