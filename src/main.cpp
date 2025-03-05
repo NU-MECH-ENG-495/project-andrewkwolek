@@ -1,131 +1,221 @@
-#include <opencv2/opencv.hpp>
-#include <opencv2/highgui.hpp>
+/**
+* This file is part of ORB-SLAM3
+*
+* Copyright (C) 2017-2021 Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+* Copyright (C) 2014-2016 Raúl Mur-Artal, José M.M. Montiel and Juan D. Tardós, University of Zaragoza.
+*
+* ORB-SLAM3 is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
+* License as published by the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* ORB-SLAM3 is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even
+* the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License along with ORB-SLAM3.
+* If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
 #include <iostream>
+#include <algorithm>
 #include <fstream>
-#include <loguru.hpp>
-#include <future>
-#include <thread>
-#include "Video.hpp"
-#include "Processor.hpp"
-#include <httplib.h> // For the web server (cpp-httplib)
+#include <chrono>
+#include <ctime>
+#include <sstream>
 
-// Constants
-const std::string SERVICE_NAME = "slam";
-const std::string VIDEO_STREAM = "udp://192.168.2.1:5600";
+#include <opencv2/core/core.hpp>
 
-// Declare Processor and Video objects
-Processor data_processor(nullptr, 115200, "192.168.2.2:9092");
+#include <System.h>
+#include "ImuTypes.h"
+#include "MavlinkManager.hpp"
+#include "CameraManager.hpp"
 
-// Function to simulate asynchronous visual odometry
-void v0() {
-    double focal = 1188.0;
-    cv::Point2d pp(960, 540);
-    cv::TermCriteria lk_params(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01);
+using namespace std;
 
-    // Initialize Visual Odometry
-    MonoVideoOdometry vo(focal, pp, lk_params);
+double ttrack_tot = 0;
+int main(int argc, char *argv[])
+{
 
-    // Initialize trajectory visualization with white background
-    cv::Mat traj = cv::Mat::ones(600, 800, CV_8UC3) * 255;
-
-    // Scale factor for visualization
-    double scale_factor = 5.0;
-
-    Video video(VIDEO_STREAM);
-    LOG_F(INFO, "Initializing stream...");
-    while (!video.frameAvailable()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-    LOG_F(INFO, "Stream initialized!");
-
-    int save_interval = 100;  // Save trajectory image every N frames
-    int frame_count = 0;
-
-    while (true) {
-        if (video.frameAvailable()) {
-            cv::Mat frame = video.getFrame();
-
-            // Process frame
-            vo.processFrame(frame);
-            cv::Point2d current_pos = vo.getMonoCoordinates();
-
-            // Scale the coordinates and negate Y (right is positive)
-            int draw_y = static_cast<int>(round(current_pos.y * scale_factor));
-            int draw_x = static_cast<int>(round(current_pos.x * scale_factor));
-
-            // Draw black trail
-            cv::circle(traj, cv::Point(draw_y + 400, draw_x + 300), 1, cv::Scalar(0, 0, 0), 2);
-
-            // Draw coordinate axes
-            cv::Point origin(400, 300);
-            int axes_length = 50;
-            cv::Scalar red(0, 0, 255), green(0, 255, 0);
-
-            // X-axis vertical (forward/back) in red
-            cv::arrowedLine(traj, origin, cv::Point(origin.x, origin.y - axes_length), red, 2);
-            // Y-axis horizontal (right is positive) in green
-            cv::arrowedLine(traj, origin, cv::Point(origin.x + axes_length, origin.y), green, 2);
-
-            // Add labels
-            cv::putText(traj, "X (forward)", cv::Point(origin.x - 20, origin.y - axes_length - 10),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 1);
-            cv::putText(traj, "Y (right)", cv::Point(origin.x + axes_length + 10, origin.y + 10),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 1);
-
-            // Show current position values (unscaled)
-            std::string pos_text = "X: " + std::to_string(current_pos.x) + " Y: " + std::to_string(-current_pos.y);
-            cv::putText(traj, pos_text, cv::Point(30, 30), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 0), 2);
-
-            // Print position to console
-            LOG_F(INFO, "Position - X: %.2f Y: %.2f", current_pos.x, -current_pos.y);
-
-            // Save trajectory image periodically
-            frame_count++;
-            if (frame_count % save_interval == 0) {
-                cv::imwrite("trajectory_" + std::to_string(frame_count) + ".png", traj);
-            }
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));  // Equivalent to asyncio.sleep(0.01)
-    }
-}
-
-// Basic HTTP server using httplib to handle requests
-void runServer() {
-    httplib::Server svr;
-
-    // GPS Data endpoint
-    svr.Get("/gps", [](const httplib::Request&, httplib::Response& res) {
-        std::string gps_data = data_processor.data_manager.getGpsData();
-        res.set_content(gps_data, "application/json");
-    });
-
-    // IMU Data endpoint
-    svr.Get("/imu", [](const httplib::Request&, httplib::Response& res) {
-        std::string imu_data = data_processor.data_manager.getImuData();
-        res.set_content(imu_data, "application/json");
-    });
-
-    // Start the server
-    svr.listen("0.0.0.0", 9050);
-}
-
-// Main function
-int main(int argc, char* argv[]) {
-    loguru::init(argc, argv);
-    LOG_F(INFO, "Starting SLAM system...");
-
-    // Ensure root privileges
-    if (geteuid() != 0) {
-        LOG_F(ERROR, "You need root privileges to run this script.");
+    if(argc < 5)
+    {
+        cerr << endl << "Usage: ./mono_inertial_euroc path_to_vocabulary path_to_settings path_to_sequence_folder_1 path_to_times_file_1 (path_to_image_folder_2 path_to_times_file_2 ... path_to_image_folder_N path_to_times_file_N) " << endl;
         return 1;
     }
 
-    // Start visual odometry and web server asynchronously
-    std::future<void> vo_future = std::async(std::launch::async, v0);
-    std::future<void> server_future = std::async(std::launch::async, runServer);
+    const int num_seq = (argc-3)/2;
+    cout << "num_seq = " << num_seq << endl;
+    bool bFileName= (((argc-3) % 2) == 1);
+    string file_name;
+    if (bFileName)
+    {
+        file_name = string(argv[argc-1]);
+        cout << "file name: " << file_name << endl;
+    }
 
-    vo_future.get();
-    server_future.get();
+    MavlinkManager mavlink_manager;
+
+    // gst_init(nullptr, nullptr);
+    // Video video;
+
+    //start threads
+    std::thread mavlink_thread(&MavlinkManager::receive_mavlink_data, &mavlink_manager);
+
+    // Load all sequences:
+    int seq;
+    vector< vector<string> > vstrImageFilenames;
+    vector< vector<double> > vTimestampsCam;
+    vector< vector<cv::Point3f> > vAcc, vGyro;
+    vector< vector<double> > vTimestampsImu;
+    vector<int> nImages;
+    vector<int> nImu;
+    vector<int> first_imu(num_seq,0);
+
+    vstrImageFilenames.resize(num_seq);
+    vTimestampsCam.resize(num_seq);
+    vAcc.resize(num_seq);
+    vGyro.resize(num_seq);
+    vTimestampsImu.resize(num_seq);
+    nImages.resize(num_seq);
+    nImu.resize(num_seq);
+
+    int tot_images = 0;
+
+    // Vector for tracking time statistics
+    vector<float> vTimesTrack;
+    vTimesTrack.resize(tot_images);
+
+    cout.precision(17);
+
+    // Create SLAM system. It initializes all system threads and gets ready to process frames.
+    ORB_SLAM3::System SLAM(argv[1],argv[2],ORB_SLAM3::System::IMU_MONOCULAR, true);
+    float imageScale = SLAM.GetImageScale();
+
+    double t_resize = 0.f;
+    double t_track = 0.f;
+
+    int proccIm=0;
+    for (seq = 0; seq<num_seq; seq++)
+    {
+
+        // Main loop
+        cv::Mat im;
+        vector<ORB_SLAM3::IMU::Point> vImuMeas;
+        proccIm = 0;
+        for(int ni=0; ni<nImages[seq]; ni++, proccIm++)
+        {
+            // Read image from file
+            im = cv::imread(vstrImageFilenames[seq][ni],cv::IMREAD_UNCHANGED); //CV_LOAD_IMAGE_UNCHANGED);
+
+            double tframe = vTimestampsCam[seq][ni];
+
+            if(im.empty())
+            {
+                cerr << endl << "Failed to load image at: "
+                     <<  vstrImageFilenames[seq][ni] << endl;
+                return 1;
+            }
+
+            if(imageScale != 1.f)
+            {
+#ifdef REGISTER_TIMES
+    #ifdef COMPILEDWITHC11
+                std::chrono::steady_clock::time_point t_Start_Resize = std::chrono::steady_clock::now();
+    #else
+                std::chrono::monotonic_clock::time_point t_Start_Resize = std::chrono::monotonic_clock::now();
+    #endif
+#endif
+                int width = im.cols * imageScale;
+                int height = im.rows * imageScale;
+                cv::resize(im, im, cv::Size(width, height));
+#ifdef REGISTER_TIMES
+    #ifdef COMPILEDWITHC11
+                std::chrono::steady_clock::time_point t_End_Resize = std::chrono::steady_clock::now();
+    #else
+                std::chrono::monotonic_clock::time_point t_End_Resize = std::chrono::monotonic_clock::now();
+    #endif
+                t_resize = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t_End_Resize - t_Start_Resize).count();
+                SLAM.InsertResizeTime(t_resize);
+#endif
+            }
+
+            // Load imu measurements from previous frame
+            vImuMeas.clear();
+
+            if(ni>0)
+            {
+                // cout << "t_cam " << tframe << endl;
+
+                while(vTimestampsImu[seq][first_imu[seq]]<=vTimestampsCam[seq][ni])
+                {
+                    vImuMeas.push_back(ORB_SLAM3::IMU::Point(vAcc[seq][first_imu[seq]].x,vAcc[seq][first_imu[seq]].y,vAcc[seq][first_imu[seq]].z,
+                                                             vGyro[seq][first_imu[seq]].x,vGyro[seq][first_imu[seq]].y,vGyro[seq][first_imu[seq]].z,
+                                                             vTimestampsImu[seq][first_imu[seq]]));
+                    first_imu[seq]++;
+                }
+            }
+
+    #ifdef COMPILEDWITHC11
+            std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+    #else
+            std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+    #endif
+
+            // Pass the image to the SLAM system
+            // cout << "tframe = " << tframe << endl;
+            SLAM.TrackMonocular(im,tframe,vImuMeas); // TODO change to monocular_inertial
+
+    #ifdef COMPILEDWITHC11
+            std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+    #else
+            std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+    #endif
+
+#ifdef REGISTER_TIMES
+            t_track = t_resize + std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(t2 - t1).count();
+            SLAM.InsertTrackTime(t_track);
+#endif
+
+            double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
+            ttrack_tot += ttrack;
+            // std::cout << "ttrack: " << ttrack << std::endl;
+
+            vTimesTrack[ni]=ttrack;
+
+            // Wait to load the next frame
+            double T=0;
+            if(ni<nImages[seq]-1)
+                T = vTimestampsCam[seq][ni+1]-tframe;
+            else if(ni>0)
+                T = tframe-vTimestampsCam[seq][ni-1];
+
+            if(ttrack<T)
+                usleep((T-ttrack)*1e6); // 1e6
+        }
+        if(seq < num_seq - 1)
+        {
+            cout << "Changing the dataset" << endl;
+
+            SLAM.ChangeDataset();
+        }
+    }
+
+    // Stop all threads
+    SLAM.Shutdown();
+
+    // Save camera trajectory
+    if (bFileName)
+    {
+        const string kf_file =  "kf_" + string(argv[argc-1]) + ".txt";
+        const string f_file =  "f_" + string(argv[argc-1]) + ".txt";
+        SLAM.SaveTrajectoryEuRoC(f_file);
+        SLAM.SaveKeyFrameTrajectoryEuRoC(kf_file);
+    }
+    else
+    {
+        SLAM.SaveTrajectoryEuRoC("CameraTrajectory.txt");
+        SLAM.SaveKeyFrameTrajectoryEuRoC("KeyFrameTrajectory.txt");
+    }
 
     return 0;
 }

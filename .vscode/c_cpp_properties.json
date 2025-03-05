@@ -3,12 +3,21 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/src/include/blueos-slam/**"
+                "/home/kwolek/ws/ORB_SLAM3/include/**",
+                "/usr/include/opencv4/**",
+                "/home/kwolek/ws/ORB_SLAM3",
+                "/usr/include/eigen3/**",
+                "/home/kwolek/ws/ORB_SLAM3/Thirdparty/Sophus",
+                "/home/kwolek/ws/Pangolin/**",
+                "/usr/include/gstreamer-1.0/**",
+                "/usr/include/glib-2.0",
+                "/usr/lib/x86_64-linux-gnu/glib-2.0/include",
+                "${workspaceFolder}/include"
             ],
             "defines": [],
             "compilerPath": "/usr/lib/ccache/clang",
-            "cStandard": "c17",
-            "cppStandard": "c++17",
+            "cStandard": "c11",
+            "cppStandard": "c++14",
             "intelliSenseMode": "linux-clang-x64"
         }
     ],
