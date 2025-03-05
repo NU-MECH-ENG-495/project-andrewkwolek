@@ -15,6 +15,7 @@ class Video {
         GstElement *sink;
 
         Video();
+        ~Video();
         GstFlowReturn new_preroll(GstAppSink* appsink, gpointer data);
         GstFlowReturn new_sample(GstAppSink* appsink, gpointer data);
         static gboolean my_bus_callback(GstBus* bus, GstMessage* message, gpointer data);

@@ -22,7 +22,6 @@ T& SensorBuffer<T>::get_latest_data() {
 template<typename T>
 T& SensorBuffer<T>::get_data_near_timestamp(int64_t target_time) {
     std::lock_guard<std::mutex> lock(buffer_mutex_);
-    if (buffer_.empty()) return std::nullopt;
 
     T closest_data;
     int64_t min_time_diff = std::numeric_limits<int64_t>::max();
