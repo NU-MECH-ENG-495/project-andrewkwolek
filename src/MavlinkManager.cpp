@@ -1,111 +1,106 @@
 #include "MavlinkManager.hpp"
 
-template<typename T>
-SensorBuffer<T>::SensorBuffer(size_t max_size) : max_size_(max_size) {}
-
-
-template<typename T>
-void SensorBuffer<T>::add_data(const T& data) {
-    std::lock_guard<std::mutex> lock(buffer_mutex_);
-    if (buffer_.size() >= max_size_) {
-        buffer_.pop_front();  // Maintain buffer size
-    }
-    buffer_.push_back(data);
-}
-
-template<typename T>
-T& SensorBuffer<T>::get_latest_data() {
-    std::lock_guard<std::mutex> lock(buffer_mutex_);
-    return buffer_.back();
-}
-
-template<typename T>
-T& SensorBuffer<T>::get_data_near_timestamp(int64_t target_time) {
-    std::lock_guard<std::mutex> lock(buffer_mutex_);
-
-    T closest_data;
-    int64_t min_time_diff = std::numeric_limits<int64_t>::max();
-
-    for (const auto& data : buffer_) {
-        int64_t timestamp = data.timestamp;  // Assuming `T` has a `timestamp` field
-        int64_t time_diff = std::abs(target_time - timestamp);
-        if (time_diff < min_time_diff) {
-            min_time_diff = time_diff;
-            closest_data = data;
-        }
-    }
-
-    return closest_data;
-}
-
 // Constructor
 MavlinkManager::MavlinkManager()
     : imu_buffer(10),
       attitude_buffer(10),
       gps_buffer(10),
       pressure_buffer(10) {
-    establish_mavlink_connection();
+    if (establish_mavlink_connection() < 0) {
+        exit(1);
+    }
     std::cout << "Mavlink connection established." << std::endl;
 }
 
 // Destructor
 MavlinkManager::~MavlinkManager() {
-    close(sock);
+    close(socket_fd);
 }
 
 // Establish UDP connection
-void MavlinkManager::establish_mavlink_connection() {
-    sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock < 0) {
-        perror("Error creating socket");
-        exit(EXIT_FAILURE);
+int MavlinkManager::establish_mavlink_connection() {
+    socket_fd = socket(PF_INET, SOCK_DGRAM, 0);
+    if (socket_fd < 0) {
+        printf("socket error: %s\n", strerror(errno));
+        return -1;
     }
 
-    memset(&gcAddr, 0, sizeof(gcAddr));
-    gcAddr.sin_family = AF_INET;
-    gcAddr.sin_addr.s_addr = INADDR_ANY;
-    gcAddr.sin_port = htons(14555);
+    // Bind to port
+    struct sockaddr_in addr = {};
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    inet_pton(AF_INET, "0.0.0.0", &(addr.sin_addr)); // listen on all network interfaces
+    addr.sin_port = htons(14550); // default port on the ground
 
-    if (bind(sock, (struct sockaddr*)&gcAddr, sizeof(gcAddr)) < 0) {
-        perror("Error binding socket");
-        close(sock);
-        exit(EXIT_FAILURE);
+    if (bind(socket_fd, (struct sockaddr*)(&addr), sizeof(addr)) != 0) {
+        printf("bind error: %s\n", strerror(errno));
+        return -2;
     }
+
+    // We set a timeout at 100ms to prevent being stuck in recvfrom for too
+    // long and missing our chance to send some stuff.
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 100000;
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
+        printf("setsockopt error: %s\n", strerror(errno));
+        return -3;
+    }
+
+    *src_addr = {};
+    src_addr_len = sizeof(*src_addr);
+    src_addr_set = false;
+
+    return 0;
 }
 
 // Function to receive MAVLink data and process it
 void MavlinkManager::receive_mavlink_data() {
-    uint8_t buf[1024];
-    mavlink_message_t msg;
-    mavlink_status_t status;
+    std::cout << "Mavlink thread started, waiting for data..." << std::endl;
+    char buffer[2048];  // Buffer to receive raw MAVLink data
+
     while (true) {
-        ssize_t recsize = recvfrom(sock, buf, sizeof(buf), 0, NULL, NULL);
-        if (recsize > 0) {
-            for (int i = 0; i < recsize; ++i) {
-                if (mavlink_parse_char(MAVLINK_COMM_0, buf[i], &msg, &status)) {
-                    switch (msg.msgid) {
+        ssize_t ret = recvfrom(socket_fd, buffer, sizeof(buffer), 0, src_addr, &src_addr_len);  // Receive data from socket
+        std::cout << "Ret: " << ret << std::endl;
+        if (ret < 0) {
+            printf("recvfrom error: %s\n", strerror(errno));
+        } else if (ret == 0) {
+            // peer has done an orderly shutdown
+            return;
+        }
+        else {
+            src_addr_set = true;
+
+            mavlink_message_t message;
+            mavlink_status_t status;
+            // Process each byte of received data to parse MAVLink messages
+            for (ssize_t i = 0; i < ret; ++i) {
+                if (mavlink_parse_char(MAVLINK_COMM_0, buffer[i], &message, &status) == 1) {
+                    // A valid MAVLink message has been parsed, now handle it
+                    switch (message.msgid) {
                         case MAVLINK_MSG_ID_RAW_IMU: {
                             mavlink_raw_imu_t imu;
-                            mavlink_msg_raw_imu_decode(&msg, &imu);
-                            imu_buffer.add_data(imu);
+                            mavlink_msg_raw_imu_decode(&message, &imu);
+                            imu_buffer.add_data(imu);  // Add IMU data to the buffer
+                            std::cout << "IMU data received!" << std::endl;
                             break;
                         }
                         case MAVLINK_MSG_ID_ATTITUDE: {
                             mavlink_attitude_t attitude;
-                            mavlink_msg_attitude_decode(&msg, &attitude);
-                            attitude_buffer.add_data(attitude);
+                            mavlink_msg_attitude_decode(&message, &attitude);
+                            attitude_buffer.add_data(attitude);  // Add attitude data to buffer
                             break;
                         }
                         case MAVLINK_MSG_ID_GLOBAL_POSITION_INT: {
                             mavlink_global_position_int_t gps;
-                            mavlink_msg_global_position_int_decode(&msg, &gps);
-                            gps_buffer.add_data(gps);
+                            mavlink_msg_global_position_int_decode(&message, &gps);
+                            gps_buffer.add_data(gps);  // Add GPS data to the buffer
                             break;
                         }
                         case MAVLINK_MSG_ID_SCALED_PRESSURE: {
                             mavlink_scaled_pressure_t pressure;
-                            mavlink_msg_scaled_pressure_decode(&msg, &pressure);
-                            pressure_buffer.add_data(pressure);
+                            mavlink_msg_scaled_pressure_decode(&message, &pressure);
+                            pressure_buffer.add_data(pressure);  // Add pressure data to the buffer
                             break;
                         }
                     }
