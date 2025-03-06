@@ -8,10 +8,10 @@ File.version: "1.0"
 Camera.type: "PinHole"
 
 # Right Camera calibration and distortion parameters (OpenCV)
-Camera1.fx: 382.613
-Camera1.fy: 382.613
-Camera1.cx: 320.183
-Camera1.cy: 236.455
+Camera1.fx: 908.17397245
+Camera1.fy: 908.17397245
+Camera1.cx: 876.34463377
+Camera1.cy: 496.85252813
 
 # distortion parameters
 Camera1.k1: 0.0
@@ -20,8 +20,8 @@ Camera1.p1: 0.0
 Camera1.p2: 0.0
 
 # Camera resolution
-Camera.width: 640
-Camera.height: 480
+Camera.width: 1920
+Camera.height: 1080
 
 # Camera frames per second 
 Camera.fps: 30
@@ -34,9 +34,9 @@ IMU.T_b_c1: !!opencv-matrix
    rows: 4
    cols: 4
    dt: f
-   data: [1,0,0,-0.005,
-         0,1,0,-0.005,
-         0,0,1,0.0117,
+   data: [0,0,1, 0.0,
+         1,0,0,-0.07,
+         0,1,0,0.16,
          0.0, 0.0, 0.0, 1.0]
 
 # Do not insert KFs when recently lost

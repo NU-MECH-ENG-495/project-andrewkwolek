@@ -1,6 +1,9 @@
 #include "CameraManager.hpp"
 
 Video::Video() {
+    // Initialize atomicFrame to nullptr
+    atomicFrame.store(nullptr);
+    
     gchar *descr = g_strdup(
         "udpsrc port=5600 "
         "! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! avdec_h264 "
@@ -17,6 +20,8 @@ Video::Video() {
         g_error_free(error);
         exit(-1);
     }
+    
+    g_free(descr);  // Free the string after use
 
     // Get sink
     sink = gst_bin_get_by_name(GST_BIN(pipeline), "sink");
@@ -28,6 +33,8 @@ Video::Video() {
     gst_app_sink_set_emit_signals((GstAppSink*)sink, true);
     gst_app_sink_set_drop((GstAppSink*)sink, true);
     gst_app_sink_set_max_buffers((GstAppSink*)sink, 1);
+    
+    // Critical fix: Pass 'this' as the user data
     GstAppSinkCallbacks callbacks = { 
         nullptr, 
         [](GstAppSink* appsink, gpointer data) { 
@@ -37,20 +44,24 @@ Video::Video() {
             return static_cast<Video*>(data)->new_sample(appsink, data); 
         }
     };
-    gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, nullptr, nullptr);
+    gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, this, nullptr);
 
     // Declare bus
     GstBus *bus;
     bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline));
-    gst_bus_add_watch(bus, my_bus_callback, nullptr);
+    gst_bus_add_watch(bus, my_bus_callback, this);
     gst_object_unref(bus);
 
     gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_PLAYING);
+    
+    g_print("Video pipeline initialized and started\n");
 }
 
 Video::~Video() {
     gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_NULL);
     gst_object_unref(GST_OBJECT(pipeline));
+    
+    g_print("Video pipeline cleaned up\n");
 }
 
 /**
@@ -63,12 +74,7 @@ GstFlowReturn Video::new_preroll(GstAppSink* /*appsink*/, gpointer /*data*/)
     return GST_FLOW_OK;
 }
 
-/**
- * @brief This is a callback that get a new frame when a preroll exist
- *
- * @param appsink
- * @return GstFlowReturn
- */
+
 GstFlowReturn Video::new_sample(GstAppSink *appsink, gpointer /*data*/)
 {
     static int framecount = 0;
@@ -109,15 +115,6 @@ GstFlowReturn Video::new_sample(GstAppSink *appsink, gpointer /*data*/)
     return GST_FLOW_OK;
 }
 
-/**
- * @brief Bus callback
- *  Print important messages
- *
- * @param bus
- * @param message
- * @param data
- * @return gboolean
- */
 gboolean Video::my_bus_callback(GstBus *bus, GstMessage *message, gpointer data)
 {
     // Debug message
@@ -141,27 +138,8 @@ gboolean Video::my_bus_callback(GstBus *bus, GstMessage *message, gpointer data)
             break;
     }
     /* we want to be notified again the next time there is a message
-    * on the bus, so returning TRUE (FALSE means we want to stop watching
-    * for messages on the bus and our callback should not be called again)
-    */
+     * on the bus, so returning TRUE (FALSE means we want to stop watching
+     * for messages on the bus and our callback should not be called again)
+     */
     return true;
 }
-
-// int main(int argc, char *argv[]) {
-//     gst_init(&argc, &argv);
-
-//     Video video;
-
-//     // Main loop
-//     while(1) {
-//         g_main_iteration(false);
-
-//         cv::Mat* frame = video.atomicFrame.load();
-//         if(frame) {
-//             cv::imshow("Frame", video.atomicFrame.load()[0]);
-//             cv::waitKey(30);
-//         }
-//     }
-
-//     return 0;
-// }

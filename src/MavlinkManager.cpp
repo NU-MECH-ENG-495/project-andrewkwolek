@@ -30,7 +30,7 @@ int MavlinkManager::establish_mavlink_connection() {
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     inet_pton(AF_INET, "0.0.0.0", &(addr.sin_addr)); // listen on all network interfaces
-    addr.sin_port = htons(14550); // default port on the ground
+    addr.sin_port = htons(14555); // default port on the ground
 
     if (bind(socket_fd, (struct sockaddr*)(&addr), sizeof(addr)) != 0) {
         printf("bind error: %s\n", strerror(errno));
@@ -61,7 +61,6 @@ void MavlinkManager::receive_mavlink_data() {
 
     while (true) {
         ssize_t ret = recvfrom(socket_fd, buffer, sizeof(buffer), 0, src_addr, &src_addr_len);  // Receive data from socket
-        std::cout << "Ret: " << ret << std::endl;
         if (ret < 0) {
             printf("recvfrom error: %s\n", strerror(errno));
         } else if (ret == 0) {
@@ -70,7 +69,6 @@ void MavlinkManager::receive_mavlink_data() {
         }
         else {
             src_addr_set = true;
-
             mavlink_message_t message;
             mavlink_status_t status;
             // Process each byte of received data to parse MAVLink messages
@@ -82,7 +80,6 @@ void MavlinkManager::receive_mavlink_data() {
                             mavlink_raw_imu_t imu;
                             mavlink_msg_raw_imu_decode(&message, &imu);
                             imu_buffer.add_data(imu);  // Add IMU data to the buffer
-                            std::cout << "IMU data received!" << std::endl;
                             break;
                         }
                         case MAVLINK_MSG_ID_ATTITUDE: {
