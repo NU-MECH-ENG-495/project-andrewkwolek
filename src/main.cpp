@@ -23,6 +23,7 @@
 #include <chrono>
 #include <ctime>
 #include <sstream>
+#include <cmath>
 
 #include <opencv2/core/core.hpp>
 
@@ -134,14 +135,14 @@ ORB_SLAM3::IMU::Point convertMavlinkToSLAM(const mavlink_raw_imu_t& imu_data) {
     // This is a simplified conversion - you'll need to adjust based on your specific sensor
     
     // Assuming accelerometer data is in mG and needs to be converted to m/s^2
-    float acc_x = imu_data.xacc * 9.81f / 1000.0f;
-    float acc_y = imu_data.yacc * 9.81f / 1000.0f;
-    float acc_z = imu_data.zacc * 9.81f / 1000.0f;
+    float acc_x = imu_data.xacc * 9.81f;
+    float acc_y = imu_data.yacc * 9.81f;
+    float acc_z = imu_data.zacc * 9.81f;
     
     // Assuming gyroscope data is in mrad/s and needs to be converted to rad/s
-    float gyro_x = imu_data.xgyro / 1000.0f;
-    float gyro_y = imu_data.ygyro / 1000.0f;
-    float gyro_z = imu_data.zgyro / 1000.0f;
+    float gyro_x = imu_data.xgyro * (3.14f / 180.0);
+    float gyro_y = imu_data.ygyro * (3.14f / 180.0);
+    float gyro_z = imu_data.zgyro * (3.14f / 180.0);
     
     // Convert timestamp from microseconds to seconds
     double timestamp = getTimestampInSeconds(imu_data.time_usec);

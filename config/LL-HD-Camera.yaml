@@ -14,10 +14,10 @@ Camera1.cx: 876.34463377
 Camera1.cy: 496.85252813
 
 # distortion parameters
-Camera1.k1: 0.0
-Camera1.k2: 0.0
-Camera1.p1: 0.0
-Camera1.p2: 0.0
+Camera1.k1: -0.0132
+Camera1.k2: 0.04666
+Camera1.p1: 0.00031479
+Camera1.p2: 0.0049896
 
 # Camera resolution
 Camera.width: 1920
@@ -43,8 +43,8 @@ IMU.T_b_c1: !!opencv-matrix
 IMU.InsertKFsWhenLost: 0
 
 # IMU noise (Use those from VINS-mono)
-IMU.NoiseGyro: 1e-3 # 2.44e-4 #1e-3 # rad/s^0.5
-IMU.NoiseAcc: 1e-2 # 1.47e-3 #1e-2 # m/s^1.5
+IMU.NoiseGyro: 6.981e-5 # 2.44e-4 #1e-3 # rad/s^0.5
+IMU.NoiseAcc: 9.81e-4 # 1.47e-3 #1e-2 # m/s^1.5
 IMU.GyroWalk: 1e-6 # rad/s^1.5
 IMU.AccWalk: 1e-4 # m/s^2.5
 IMU.Frequency: 200.0
