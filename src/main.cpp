@@ -83,38 +83,43 @@ int main(int argc, char *argv[]) {
     while (!SLAM.isShutDown())
     {
         g_main_iteration(false);
-
+        
+        mavlink_raw_imu_t imu_data;
         cv::Mat* frame = video.atomicFrame.load();
-        if(frame) {
-            imCV = video.atomicFrame.load()[0];
+        while (!frame) {
+            cout << "No frame." << endl;
+            if (!mavlink_manager.imu_buffer.is_empty()) {
+                imu_data = mavlink_manager.imu_buffer.get_latest_data();
+                ORB_SLAM3::IMU::Point imu_point = convertMavlinkToSLAM(imu_data);
+                vImuMeas.push_back(imu_point);
+                timestamp = getTimestampInSeconds(imu_data.time_usec);
+            } else {
+                std::cout << "No IMU data available yet." << std::endl;
+            }
+            frame = video.atomicFrame.load();
+        }
+
+        imu_data = mavlink_manager.imu_buffer.get_latest_data();
+        ORB_SLAM3::IMU::Point imu_point = convertMavlinkToSLAM(imu_data);
+        vImuMeas.push_back(imu_point);
+        timestamp = getTimestampInSeconds(imu_data.time_usec);
+
+        imCV = video.atomicFrame.load()[0];
+
+        if (imageScale == 1.f) {
+            im = imCV.clone();
         }
         else {
-            continue;
-        }
-
-        im = imCV.clone();
-
-        mavlink_raw_imu_t imu_data;
-        if (!mavlink_manager.imu_buffer.is_empty()) {
-            imu_data = mavlink_manager.imu_buffer.get_latest_data();
-            ORB_SLAM3::IMU::Point imu_point = convertMavlinkToSLAM(imu_data);
-            vImuMeas.push_back(imu_point);
-            timestamp = getTimestampInSeconds(imu_data.time_usec);
-
-        } else {
-            std::cout << "No IMU data available yet." << std::endl;
-            continue;
-        }
-
-        if(imageScale != 1.f)
-        {
             int width = im.cols * imageScale;
             int height = im.rows * imageScale;
-            cv::resize(im, im, cv::Size(width, height));
+            cv::resize(imCV, im, cv::Size(width, height));
         }
 
         // cv::cvtColor(im, im, cv::COLOR_BGR2GRAY);
         // Pass the image to the SLAM system
+        if (vImuMeas.empty()) {
+            cout << "Empty: " << endl;
+        }
         SLAM.TrackMonocular(im, timestamp, vImuMeas);
 
         // Clear the previous IMU measurements to load the new ones
