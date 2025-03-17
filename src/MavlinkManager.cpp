@@ -79,25 +79,8 @@ void MavlinkManager::receive_mavlink_data() {
                         case MAVLINK_MSG_ID_RAW_IMU: {
                             mavlink_raw_imu_t imu;
                             mavlink_msg_raw_imu_decode(&message, &imu);
-                            imu_buffer.add_data(imu);  // Add IMU data to the buffer
-                            break;
-                        }
-                        case MAVLINK_MSG_ID_ATTITUDE: {
-                            mavlink_attitude_t attitude;
-                            mavlink_msg_attitude_decode(&message, &attitude);
-                            attitude_buffer.add_data(attitude);  // Add attitude data to buffer
-                            break;
-                        }
-                        case MAVLINK_MSG_ID_GLOBAL_POSITION_INT: {
-                            mavlink_global_position_int_t gps;
-                            mavlink_msg_global_position_int_decode(&message, &gps);
-                            gps_buffer.add_data(gps);  // Add GPS data to the buffer
-                            break;
-                        }
-                        case MAVLINK_MSG_ID_SCALED_PRESSURE: {
-                            mavlink_scaled_pressure_t pressure;
-                            mavlink_msg_scaled_pressure_decode(&message, &pressure);
-                            pressure_buffer.add_data(pressure);  // Add pressure data to the buffer
+                            current_timestamp = getTimestampInSeconds(imu.time_usec);
+                            imu_vec.push_back(convertMavlinkToSLAM(imu));
                             break;
                         }
                     }
@@ -105,4 +88,40 @@ void MavlinkManager::receive_mavlink_data() {
             }
         }
     }
+}
+
+ORB_SLAM3::IMU::Point MavlinkManager::convertMavlinkToSLAM(const mavlink_raw_imu_t& imu_data) {
+    // Convert raw IMU data to appropriate units (depends on your sensor calibration)
+    // This is a simplified conversion - you'll need to adjust based on your specific sensor
+    
+    // Assuming accelerometer data is in mG and needs to be converted to m/s^2
+    float acc_x = imu_data.xacc / 100.0;
+    float acc_y = imu_data.yacc / 100.0;
+    float acc_z = imu_data.zacc / 100.0;
+    
+    // Assuming gyroscope data is in mrad/s and needs to be converted to rad/s
+    float gyro_x = imu_data.xgyro / 1000.0;
+    float gyro_y = imu_data.ygyro / 1000.0;
+    float gyro_z = imu_data.zgyro / 1000.0;
+    
+    // Convert timestamp from microseconds to seconds
+    double timestamp = getTimestampInSeconds(imu_data.time_usec);
+    
+    return ORB_SLAM3::IMU::Point(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, timestamp);
+}
+
+double MavlinkManager::getTimestampInSeconds(int64_t timestamp_us) {
+    return static_cast<double>(timestamp_us) / 1e6;
+}
+
+std::vector<ORB_SLAM3::IMU::Point> MavlinkManager::getIMUVector() {
+    return imu_vec;
+}
+
+void MavlinkManager::resetIMUVector() {
+    imu_vec.clear();
+}
+
+double MavlinkManager::getCurrentTimestamp() {
+    return current_timestamp;
 }

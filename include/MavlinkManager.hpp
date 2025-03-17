@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "ImuTypes.h"
+
 // Buffer class (similar to SensorBuffer in Python)
 template<typename T>
 class SensorBuffer {
@@ -73,11 +75,18 @@ public:
     ~MavlinkManager();
     int establish_mavlink_connection();
     void receive_mavlink_data();
+    ORB_SLAM3::IMU::Point MavlinkManager::convertMavlinkToSLAM(const mavlink_raw_imu_t& imu_data);
+    double getTimestampInSeconds(int64_t timestamp_us);
+    std::vector<ORB_SLAM3::IMU::Point> getIMUVector();
+    void resetIMUVector();
+    double getCurrentTimestamp();
 
     SensorBuffer<mavlink_raw_imu_t> imu_buffer;
     SensorBuffer<mavlink_attitude_t> attitude_buffer;
     SensorBuffer<mavlink_global_position_int_t> gps_buffer;
     SensorBuffer<mavlink_scaled_pressure_t> pressure_buffer;
+    std::vector<ORB_SLAM3::IMU::Point> imu_vec;
+    double current_timestamp;
 
     struct sockaddr* src_addr;
     socklen_t src_addr_len;

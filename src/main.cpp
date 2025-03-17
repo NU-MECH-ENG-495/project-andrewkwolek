@@ -34,8 +34,6 @@
 
 using namespace std;
 
-ORB_SLAM3::IMU::Point convertMavlinkToSLAM(const mavlink_raw_imu_t& imu_data);
-double getTimestampInSeconds(int64_t timestamp_us);
 
 bool b_continue_session;
 
@@ -83,47 +81,32 @@ int main(int argc, char *argv[]) {
     while (!SLAM.isShutDown())
     {
         g_main_iteration(false);
-        
-        mavlink_raw_imu_t imu_data;
+
         cv::Mat* frame = video.atomicFrame.load();
-        while (!frame) {
-            cout << "No frame." << endl;
-            if (!mavlink_manager.imu_buffer.is_empty()) {
-                imu_data = mavlink_manager.imu_buffer.get_latest_data();
-                ORB_SLAM3::IMU::Point imu_point = convertMavlinkToSLAM(imu_data);
-                vImuMeas.push_back(imu_point);
-                timestamp = getTimestampInSeconds(imu_data.time_usec);
-            } else {
-                std::cout << "No IMU data available yet." << std::endl;
-            }
-            frame = video.atomicFrame.load();
-        }
-
-        imu_data = mavlink_manager.imu_buffer.get_latest_data();
-        ORB_SLAM3::IMU::Point imu_point = convertMavlinkToSLAM(imu_data);
-        vImuMeas.push_back(imu_point);
-        timestamp = getTimestampInSeconds(imu_data.time_usec);
-
-        imCV = video.atomicFrame.load()[0];
-
-        if (imageScale == 1.f) {
-            im = imCV.clone();
+        if(frame) {
+            imCV = video.atomicFrame.load()[0];
+            timestamp = mavlink_manager.getCurrentTimestamp();
         }
         else {
-            int width = im.cols * imageScale;
-            int height = im.rows * imageScale;
-            cv::resize(imCV, im, cv::Size(width, height));
+            continue;
         }
 
-        // cv::cvtColor(im, im, cv::COLOR_BGR2GRAY);
-        // Pass the image to the SLAM system
-        if (vImuMeas.empty()) {
-            cout << "Empty: " << endl;
+        im = imCV.clone();
+
+        vImuMeas = mavlink_manager.getIMUVector();
+
+        if(imageScale != 1.f)
+        {
+            int width = im.cols * imageScale;
+            int height = im.rows * imageScale;
+            cv::resize(im, im, cv::Size(width, height));
         }
+
+        // Pass the image to the SLAM system
         SLAM.TrackMonocular(im, timestamp, vImuMeas);
 
         // Clear the previous IMU measurements to load the new ones
-        vImuMeas.clear();
+        mavlink_manager.resetIMUVector();
 
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -133,28 +116,4 @@ int main(int argc, char *argv[]) {
     if (mavlink_thread.joinable()) {
         mavlink_thread.join();
     }
-}
-
-ORB_SLAM3::IMU::Point convertMavlinkToSLAM(const mavlink_raw_imu_t& imu_data) {
-    // Convert raw IMU data to appropriate units (depends on your sensor calibration)
-    // This is a simplified conversion - you'll need to adjust based on your specific sensor
-    
-    // Assuming accelerometer data is in mG and needs to be converted to m/s^2
-    float acc_x = imu_data.xacc * 9.81f;
-    float acc_y = imu_data.yacc * 9.81f;
-    float acc_z = imu_data.zacc * 9.81f;
-    
-    // Assuming gyroscope data is in mrad/s and needs to be converted to rad/s
-    float gyro_x = imu_data.xgyro * (3.14f / 180.0);
-    float gyro_y = imu_data.ygyro * (3.14f / 180.0);
-    float gyro_z = imu_data.zgyro * (3.14f / 180.0);
-    
-    // Convert timestamp from microseconds to seconds
-    double timestamp = getTimestampInSeconds(imu_data.time_usec);
-    
-    return ORB_SLAM3::IMU::Point(acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, timestamp);
-}
-
-double getTimestampInSeconds(int64_t timestamp_us) {
-    return static_cast<double>(timestamp_us) / 1e6;
 }
