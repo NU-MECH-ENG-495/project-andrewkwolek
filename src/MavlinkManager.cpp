@@ -79,6 +79,8 @@ void MavlinkManager::receive_mavlink_data() {
                         case MAVLINK_MSG_ID_RAW_IMU: {
                             mavlink_raw_imu_t imu;
                             mavlink_msg_raw_imu_decode(&message, &imu);
+
+                            std::lock_guard<std::mutex> lock(data_mutex);
                             current_timestamp = getTimestampInSeconds(imu.time_usec);
                             imu_vec.push_back(convertMavlinkToSLAM(imu));
                             break;
@@ -115,13 +117,16 @@ double MavlinkManager::getTimestampInSeconds(int64_t timestamp_us) {
 }
 
 std::vector<ORB_SLAM3::IMU::Point> MavlinkManager::getIMUVector() {
+    std::lock_guard<std::mutex> lock(data_mutex);
     return imu_vec;
 }
 
 void MavlinkManager::resetIMUVector() {
+    std::lock_guard<std::mutex> lock(data_mutex);
     imu_vec.clear();
 }
 
 double MavlinkManager::getCurrentTimestamp() {
+    std::lock_guard<std::mutex> lock(data_mutex);
     return current_timestamp;
 }

@@ -88,6 +88,8 @@ public:
     std::vector<ORB_SLAM3::IMU::Point> imu_vec;
     double current_timestamp;
 
+    std::mutex data_mutex;  // Mutex to protect shared data
+
     struct sockaddr* src_addr;
     socklen_t src_addr_len;
     bool src_addr_set;
