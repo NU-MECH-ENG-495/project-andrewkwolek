@@ -98,7 +98,9 @@ int main(int argc, char *argv[]) {
 
         vImuMeas = mavlink_manager.getIMUVector();
 
-        cout << "IMU size: " << vImuMeas.size() << endl;
+        if (vImuMeas.empty()) {
+            continue;
+        }
 
         if(imageScale != 1.f)
         {
