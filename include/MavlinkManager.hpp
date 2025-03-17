@@ -75,7 +75,7 @@ public:
     ~MavlinkManager();
     int establish_mavlink_connection();
     void receive_mavlink_data();
-    ORB_SLAM3::IMU::Point convertMavlinkToSLAM(const mavlink_raw_imu_t& imu_data);
+    ORB_SLAM3::IMU::Point convertMavlinkToSLAM(mavlink_raw_imu_t& imu_data);
     double getTimestampInSeconds(int64_t timestamp_us);
     std::vector<ORB_SLAM3::IMU::Point> getIMUVector();
     void resetIMUVector();

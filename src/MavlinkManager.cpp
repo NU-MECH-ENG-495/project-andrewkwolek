@@ -7,6 +7,7 @@ MavlinkManager::MavlinkManager()
       gps_buffer(10),
       pressure_buffer(10) {
     if (establish_mavlink_connection() < 0) {
+        std::cout << "Code exiting." << std::endl;
         exit(1);
     }
     std::cout << "Mavlink connection established." << std::endl;
@@ -21,7 +22,7 @@ MavlinkManager::~MavlinkManager() {
 int MavlinkManager::establish_mavlink_connection() {
     socket_fd = socket(PF_INET, SOCK_DGRAM, 0);
     if (socket_fd < 0) {
-        printf("socket error: %s\n", strerror(errno));
+        std::cout << "socket error: " << strerror(errno) << std::endl;
         return -1;
     }
 
@@ -33,7 +34,7 @@ int MavlinkManager::establish_mavlink_connection() {
     addr.sin_port = htons(14555); // default port on the ground
 
     if (bind(socket_fd, (struct sockaddr*)(&addr), sizeof(addr)) != 0) {
-        printf("bind error: %s\n", strerror(errno));
+        std::cout << "bind error: " << strerror(errno) << std::endl;
         return -2;
     }
 
@@ -43,7 +44,7 @@ int MavlinkManager::establish_mavlink_connection() {
     tv.tv_sec = 0;
     tv.tv_usec = 100000;
     if (setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) < 0) {
-        printf("setsockopt error: %s\n", strerror(errno));
+        std::cout << "setsockopt error: " << strerror(errno) << std::endl;
         return -3;
     }
 
@@ -83,6 +84,7 @@ void MavlinkManager::receive_mavlink_data() {
                             std::lock_guard<std::mutex> lock(data_mutex);
                             current_timestamp = getTimestampInSeconds(imu.time_usec);
                             imu_vec.push_back(convertMavlinkToSLAM(imu));
+                            imu_buffer.add_data(imu);
                             break;
                         }
                     }
@@ -92,7 +94,7 @@ void MavlinkManager::receive_mavlink_data() {
     }
 }
 
-ORB_SLAM3::IMU::Point MavlinkManager::convertMavlinkToSLAM(const mavlink_raw_imu_t& imu_data) {
+ORB_SLAM3::IMU::Point MavlinkManager::convertMavlinkToSLAM(mavlink_raw_imu_t& imu_data) {
     // Convert raw IMU data to appropriate units (depends on your sensor calibration)
     // This is a simplified conversion - you'll need to adjust based on your specific sensor
     

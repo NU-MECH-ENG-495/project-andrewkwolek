@@ -68,9 +68,11 @@ int main(int argc, char *argv[]) {
     ORB_SLAM3::System SLAM(vocab_file, settings_file, ORB_SLAM3::System::IMU_MONOCULAR, true);
     float imageScale = SLAM.GetImageScale();
 
+    cout << "Starting Mavlink Manager." << endl;
     MavlinkManager mavlink_manager;
     std::thread mavlink_thread(&MavlinkManager::receive_mavlink_data, &mavlink_manager);
 
+    cout << "Starting video stream." << endl;
     Video video;
 
     double timestamp;
@@ -78,6 +80,7 @@ int main(int argc, char *argv[]) {
     cv::Mat im;
     vector<ORB_SLAM3::IMU::Point> vImuMeas;
 
+    cout << "Entering SLAM loop." << endl;
     while (!SLAM.isShutDown())
     {
         g_main_iteration(false);

@@ -5,9 +5,9 @@ Video::Video() {
     atomicFrame.store(nullptr);
     
     gchar *descr = g_strdup(
-        "udpsrc port=5602 "
-        "! application/x-rtp, payload=26 ! rtpjpegdepay ! jpegdec "
-        "! videoconvert ! video/x-raw,format=(string)BGR ! videoconvert "
+        "udpsrc port=5600 "
+        "! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! avdec_h264 "
+        "! decodebin ! videoconvert ! video/x-raw,format=(string)BGR ! videoconvert "
         "! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true"
     );
 
