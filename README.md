@@ -32,6 +32,8 @@ This allowed me to confirm that the code was functioning correctly before transi
 As anticipated, ORB-SLAM3 encountered significant challenges underwater due to the lack of distinguishable features, light attenuation, and the added latency from the ground control application needed to operate the ROV.
 ORB-SLAM3 only displays the video feed if it detects enough features, and given that the Northwestern pool had very few identifiable features, the video feed was never displayed.
 
+https://github.com/user-attachments/assets/b3f2607b-6ace-4350-a158-762018da3f9e
+
 ## Future Considerations
 
 In the future, I plan to implement a feature enhancement algorithm to address the challenges of underwater vision. This could help restore vibrant colors like red, which tend to be washed out underwater, making them appear as vivid as they would in air.
