@@ -38,3 +38,5 @@ https://github.com/user-attachments/assets/b3f2607b-6ace-4350-a158-762018da3f9e
 
 In the future, I plan to implement a feature enhancement algorithm to address the challenges of underwater vision. This could help restore vibrant colors like red, which tend to be washed out underwater, making them appear as vivid as they would in air.
 I also aim to test the system in a natural aquatic environment, where the features are less uniform and more easily identifiable, providing a more suitable testing ground than a controlled pool environment.
+
+![Image](https://github.com/user-attachments/assets/11656db7-7205-4ed8-9ed3-efca105bfb21)
