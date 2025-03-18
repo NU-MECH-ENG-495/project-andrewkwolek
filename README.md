@@ -1,6 +1,6 @@
 # Monocular Inertial SLAM using ORB-SLAM3
 
-Insert video
+https://github.com/user-attachments/assets/e868b9e2-961b-415a-aac3-5edf1a6d8691
 
 ## Overview
 
