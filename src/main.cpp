@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        if(imageScale != 1.f)
+        if(imageScale != 0.5f)
         {
             int width = im.cols * imageScale;
             int height = im.rows * imageScale;
